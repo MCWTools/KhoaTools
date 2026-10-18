@@ -1,10 +1,12 @@
-# Automatically build the project and run any configured tests for every push
-# and submitted pull request. This can help catch issues that only occur on
-# certain platforms or Java versions, and provides a first line of defence
-# against bad commits.
-
 name: build
 on: [pull_request, push]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -12,19 +14,52 @@ jobs:
     steps:
       - name: checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - name: validate gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
+
       - name: setup jdk
         uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'microsoft'
+
+      - name: compute version
+        id: version
+        run: |
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+          if [ -z "$last" ]; then
+            ver="1.0.0"
+          else
+            IFS='.' read -r major minor patch <<< "${last#v}"
+            patch=$((patch + 1))
+            if [ "$patch" -gt 9 ]; then patch=0; minor=$((minor + 1)); fi
+            if [ "$minor" -gt 9 ]; then minor=0; major=$((major + 1)); fi
+            ver="$major.$minor.$patch"
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "Version: $ver"
+
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+
       - name: build
-        run: ./gradlew build
+        run: ./gradlew build -Pmod_version=${{ steps.version.outputs.version }}
+
       - name: capture build artifacts
         uses: actions/upload-artifact@v7
         with:
           name: Artifacts
           path: build/libs/
+
+      - name: release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: KhoaTools ${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: build/libs/*.jar
