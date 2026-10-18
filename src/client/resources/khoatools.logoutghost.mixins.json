@@ -1,0 +1,17 @@
+{
+	"required": true,
+	"package": "khoa.logoutghost.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"AvatarRendererMixin",
+		"ClientPacketListenerMixin",
+		"DebugRendererMixin",
+		"LivingEntityRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

@@ -1,0 +1,45 @@
+{
+	"schemaVersion": 1,
+	"id": "khoatools",
+	"version": "${version}",
+	"name": "KhoaTools",
+	"description": "Expandable toolbox: downloadchunk, loaddownloadedchunk, betterchat, getip, locatorfinder, optimizefps, logoutghost, sky, autoclicker, autoreconnect, afkmode, fullbright. Commands: /khoagui (GUI), /khoatoolsclient ... (client features) and /khoatools ... (server features, op only).",
+	"authors": [
+		"Khoa"
+	],
+	"license": "CC0-1.0",
+	"icon": "assets/khoatools/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"khoa.tools.KhoaTools"
+		],
+		"client": [
+			"khoa.tools.client.KhoaToolsClient"
+		],
+		"fabric-datagen": [
+			"khoa.tools.client.KhoaToolsDataGenerator"
+		]
+	},
+	"mixins": [
+		"khoatools.mixins.json",
+		{
+			"config": "khoatools.client.mixins.json",
+			"environment": "client"
+		},
+		{
+			"config": "khoatools.logoutghost.mixins.json",
+			"environment": "client"
+		},
+		{
+			"config": "khoatools.skychanger.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

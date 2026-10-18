@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "khoa.el.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"EntityRenderDispatcherMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

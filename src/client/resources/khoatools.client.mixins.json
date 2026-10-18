@@ -1,0 +1,30 @@
+{
+	"required": true,
+	"package": "khoa.tools.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"ChatComponentMixin",
+		"OptionInstanceAccessor",
+		"KeyMappingAccessor",
+		"ChatScreenMixin",
+		"RulerMinecraftMixin",
+		"LightmapRenderStateExtractorMixin",
+		"MusicManagerMixin",
+		"EntityRenderDispatcherMixin",
+		"BlockEntityRenderDispatcherMixin",
+		"ParticleEngineMixin",
+		"SpawnerRenderStateMixin",
+		"SpawnerRendererMixin",
+		"TrialSpawnerRendererMixin",
+		"ClientPacketListenerExplosionMixin",
+		"ClientLevelLightMixin",
+		"ClientPacketListenerLightMixin",
+		"PrimedTntMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}
