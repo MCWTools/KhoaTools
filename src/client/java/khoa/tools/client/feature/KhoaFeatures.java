@@ -24,6 +24,7 @@ import khoa.tools.client.feature.bettertnt.BetterTntFeature;
 import khoa.tools.client.feature.optimizefps.OptimizeFpsFeature;
 import khoa.tools.client.feature.playlist.PlaylistFeature;
 import khoa.tools.client.feature.drawshape.DrawShapeFeature;
+import khoa.tools.client.feature.khoacopy.KhoaCopyFeature;
 import khoa.tools.client.feature.lightlevel.LightLevelOverlayFeature;
 import khoa.tools.client.feature.tnthitray.TntHitRayFeature;
 import khoa.tools.client.feature.ruler.RulerFeature;
@@ -56,7 +57,8 @@ public final class KhoaFeatures {
 		new RulerFeature(),
 		new ItemCounterFeature(),
 		new DrawShapeFeature(),
-		new LightLevelOverlayFeature()
+		new LightLevelOverlayFeature(),
+		new KhoaCopyFeature()
 		// new SimulateFeature() (hidden for now)
 		// add new features here
 	);
