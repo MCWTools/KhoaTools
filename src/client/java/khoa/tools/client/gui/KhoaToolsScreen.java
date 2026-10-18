@@ -86,6 +86,34 @@ public final class KhoaToolsScreen extends Screen {
 	private EditBox search;
 	private final List<Row> rows = new ArrayList<>();
 
+	/** Number boxes apply their value when they lose focus (click away, Enter, tab change or closing), not on every keystroke. */
+	private static final class IntField {
+		final EditBox box;
+		final Setting setting;
+		String text;
+		boolean dirty;
+
+		IntField(EditBox box, Setting setting) {
+			this.box = box;
+			this.setting = setting;
+		}
+	}
+
+	private final List<IntField> intFields = new ArrayList<>();
+
+	private void commitInts(boolean force) {
+		for (IntField f : intFields) {
+			if (f.dirty && (force || !f.box.isFocused())) {
+				f.dirty = false;
+				try {
+					f.setting.setInt(Integer.parseInt(f.text));
+				} catch (NumberFormatException ignored) {
+					// empty, just "-" or too long: keep the previous value
+				}
+			}
+		}
+	}
+
 	private int frameW;
 	private int frameX;
 	private int listTop;
@@ -142,6 +170,8 @@ public final class KhoaToolsScreen extends Screen {
 	protected void init() {
 		commitCommand(); // typed but not applied yet (window resized)
 		this.clearWidgets();
+		commitInts(true); // a tab change must not lose a number that is still being edited
+		this.intFields.clear();
 		this.rows.clear();
 		layout();
 		commandBox = null;
@@ -188,20 +218,16 @@ public final class KhoaToolsScreen extends Screen {
 					boolean negative = setting.min < 0;
 					field.setMaxLength(9);
 					field.setValue(String.valueOf(setting.getInt()));
+					final IntField intField = new IntField(field, setting);
+					this.intFields.add(intField);
 					field.setResponder(value -> {
 						String clean = digitsOnly(value, negative);
 						if (!clean.equals(value)) {
 							field.setValue(clean); // calls this responder again with the clean text
 							return;
 						}
-						if (clean.isEmpty() || clean.equals("-")) {
-							return;
-						}
-						try {
-							setting.setInt(Integer.parseInt(clean));
-						} catch (NumberFormatException ignored) {
-							// too long, keep the previous value
-						}
+						intField.text = clean;
+						intField.dirty = !clean.isEmpty() && !clean.equals("-");
 					});
 				} else {
 					field.setMaxLength(64);
@@ -259,6 +285,7 @@ public final class KhoaToolsScreen extends Screen {
 	@Override
 	public void tick() {
 		super.tick();
+		commitInts(false);
 		if (pendingCommand != null && ++pendingTicks >= 40) {
 			commitCommand();
 		}
@@ -266,6 +293,7 @@ public final class KhoaToolsScreen extends Screen {
 
 	@Override
 	public void removed() {
+		commitInts(true);
 		commitCommand();
 		super.removed();
 	}
@@ -572,6 +600,14 @@ public final class KhoaToolsScreen extends Screen {
 	/** While the Keybind button says [ Waiting ]: Esc = None, any other key = the new keybind. Handled before Screen closes on Esc. */
 	@Override
 	public boolean keyPressed(KeyEvent event) {
+		if (event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER) {
+			for (IntField f : intFields) {
+				if (f.box.isFocused()) {
+					commitInts(true);
+					return true;
+				}
+			}
+		}
 		if (configCard != null && commandBox != null && commandBox.isFocused()
 			&& (event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER)) {
 			commitCommand();

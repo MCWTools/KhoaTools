@@ -122,7 +122,7 @@ public final class ChatCache {
 	}
 
 	private static void trimMemory() {
-		int max = BetterChatConfig.effectiveLength();
+		int max = BetterChatConfig.limit();
 		while (MESSAGES.size() > max) {
 			MESSAGES.removeFirst();
 		}

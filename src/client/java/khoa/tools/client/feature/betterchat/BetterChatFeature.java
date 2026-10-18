@@ -46,7 +46,7 @@ public final class BetterChatFeature implements KhoaFeature {
 	@Override
 	public List<Setting> settings() {
 		return List.of(
-			Setting.integer("length", "Messages kept", "How many messages are kept before the oldest is deleted. 0 = vanilla default (100).",
+			Setting.integer("length", "Messages kept", "How many messages are kept before the oldest is deleted. 0 = vanilla default (100). Higher applies at once; lower is applied on the next join (nothing is deleted now).",
 				0, BetterChatConfig.MAX_LENGTH, BetterChatConfig::length, value -> applyLength(Minecraft.getInstance(), value)),
 			Setting.bool("cache", "Cache chat", "Save server chat to disk and show it again on the next join.",
 				BetterChatConfig::cache, value -> applyCache(Minecraft.getInstance(), value)));
@@ -63,11 +63,9 @@ public final class BetterChatFeature implements KhoaFeature {
 	}
 
 	private static void applyLength(Minecraft mc, int amount) {
+		// A higher value applies at once. A lower value keeps every message you already have; it is only applied on the next join.
 		BetterChatConfig.setLength(amount);
-		if (mc.gui != null) {
-			((ChatComponentExt) mc.gui.getChat()).khoatools$trimToLength();
-		}
-		ChatCache.onLengthChanged();
+		BetterChatConfig.raiseLimit();
 	}
 
 	private static void applyCache(Minecraft mc, boolean enabled) {
@@ -82,7 +80,10 @@ public final class BetterChatFeature implements KhoaFeature {
 
 	@Override
 	public void onInit() {
-		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ChatCache.onJoin(client));
+		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+			BetterChatConfig.resetLimit();
+			ChatCache.onJoin(client);
+		});
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ChatCache.onDisconnect());
 		ClientTickEvents.END_CLIENT_TICK.register(client -> ChatCache.tick());
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> ChatCache.flush(false));

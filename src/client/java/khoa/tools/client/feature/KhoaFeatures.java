@@ -31,6 +31,7 @@ import khoa.tools.client.feature.lightlevel.LightLevelOverlayFeature;
 import khoa.tools.client.feature.tnthitray.TntHitRayFeature;
 import khoa.tools.client.feature.ruler.RulerFeature;
 import khoa.tools.client.feature.itemcounter.ItemCounterFeature;
+import khoa.tools.client.feature.sneak.SneakFeature;
 
 public final class KhoaFeatures {
 	private static final List<KhoaFeature> ALL = List.of(
@@ -62,7 +63,8 @@ public final class KhoaFeatures {
 		new ItemCounterFeature(),
 		new DrawShapeFeature(),
 		new LightLevelOverlayFeature(),
-		new KhoaCopyFeature()
+		new KhoaCopyFeature(),
+		new SneakFeature()
 		// new SimulateFeature() (hidden for now)
 		// add new features here
 	);

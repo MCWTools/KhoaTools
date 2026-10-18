@@ -58,12 +58,12 @@ public abstract class ChatComponentMixin implements ChatComponentExt {
 	// Vanilla keeps 100 messages / 100 wrapped lines. With a custom length we do the trimming ourselves.
 	@ModifyConstant(method = "addMessageToQueue", constant = @Constant(intValue = 100))
 	private int khoatools$messageLimit(int vanilla) {
-		return BetterChatConfig.length() > 0 ? Integer.MAX_VALUE : vanilla;
+		return BetterChatConfig.limit() != BetterChatConfig.VANILLA_LENGTH ? Integer.MAX_VALUE : vanilla;
 	}
 
 	@ModifyConstant(method = "addMessageToDisplayQueue", constant = @Constant(intValue = 100))
 	private int khoatools$lineLimit(int vanilla) {
-		return BetterChatConfig.length() > 0 ? Integer.MAX_VALUE : vanilla;
+		return BetterChatConfig.limit() != BetterChatConfig.VANILLA_LENGTH ? Integer.MAX_VALUE : vanilla;
 	}
 
 	@Inject(method = "addMessageToQueue", at = @At("TAIL"))
@@ -115,8 +115,8 @@ public abstract class ChatComponentMixin implements ChatComponentExt {
 
 	@Override
 	public void khoatools$trimToLength() {
-		int max = BetterChatConfig.length();
-		if (max <= 0) {
+		int max = BetterChatConfig.limit();
+		if (max == BetterChatConfig.VANILLA_LENGTH) {
 			return;
 		}
 		while (this.allMessages.size() > max) {

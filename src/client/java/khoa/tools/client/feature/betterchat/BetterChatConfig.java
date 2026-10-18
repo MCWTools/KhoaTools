@@ -18,7 +18,27 @@ public final class BetterChatConfig {
 		return section.has("length") ? Math.max(0, section.get("length").getAsInt()) : 0;
 	}
 
-	/** How many messages are actually kept (custom length or vanilla default). */
+	/** Limit in force for this session. Raising "Messages kept" applies at once; lowering it only takes effect after the next join. */
+	private static int sessionLimit = -1;
+
+	public static int limit() {
+		if (sessionLimit < 0) {
+			sessionLimit = effectiveLength();
+		}
+		return sessionLimit;
+	}
+
+	/** The setting changed: a higher value applies immediately, a lower one never deletes anything now. */
+	public static void raiseLimit() {
+		sessionLimit = Math.max(limit(), effectiveLength());
+	}
+
+	/** On join: apply the configured value (this is where a lowered value finally cuts old messages). */
+	public static void resetLimit() {
+		sessionLimit = effectiveLength();
+	}
+
+	/** How many messages the setting asks for (custom length or vanilla default). */
 	public static int effectiveLength() {
 		int length = length();
 		return length > 0 ? length : VANILLA_LENGTH;
