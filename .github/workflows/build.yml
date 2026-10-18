@@ -45,6 +45,16 @@ jobs:
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
 
+      - name: set version
+        run: |
+          VER=${{ steps.version.outputs.version }}
+          sed -i -E "s/^(mod_version|version)[[:space:]]*=.*/\1=$VER/" gradle.properties
+          sed -i -E "s/^version[[:space:]]*=[[:space:]]*['\"][^'\"]*['\"]/version = '$VER'/" build.gradle
+          grep -nE '^(mod_version|version)' gradle.properties build.gradle || true
+
+      - name: build
+        run: ./gradlew build
+
       - name: build
         run: ./gradlew build -Pmod_version=${{ steps.version.outputs.version }}
 
