@@ -178,11 +178,7 @@ public final class KhoaCopyFeature implements KhoaFeature {
 
 		for (int y = -r; y <= r; y++) {
 			for (int z = -r; z <= r; z++) {
-				int rem = r2 - y * y - z * z;
-				if (rem < 0) {
-					continue;
-				}
-				int w = (int) Math.floor(Math.sqrt(rem));
+				int w = r;
 				int runId = -1;
 				int runX = 0;
 				int runLen = 0;
