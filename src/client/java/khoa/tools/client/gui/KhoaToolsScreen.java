@@ -21,6 +21,7 @@ import net.minecraft.util.FormattedCharSequence;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import khoa.tools.KhoaTools;
+import khoa.tools.client.config.KhoaCommandBinds;
 import khoa.tools.client.config.KhoaKeybinds;
 import khoa.tools.client.feature.KhoaFeature;
 import khoa.tools.client.feature.KhoaFeatures;
@@ -76,6 +77,11 @@ public final class KhoaToolsScreen extends Screen {
 	/** Config screen: the Keybind button was clicked and the next key press is the new keybind (Esc = None). */
 	private boolean waitingKey;
 	private int keybindY;
+	/** Config screen: Command row (extra /command for this feature). pendingCommand != null = typed but not applied yet. */
+	private int commandY;
+	private EditBox commandBox;
+	private String pendingCommand;
+	private int pendingTicks;
 
 	private EditBox search;
 	private final List<Row> rows = new ArrayList<>();
@@ -134,9 +140,11 @@ public final class KhoaToolsScreen extends Screen {
 
 	@Override
 	protected void init() {
+		commitCommand(); // typed but not applied yet (window resized)
 		this.clearWidgets();
 		this.rows.clear();
 		layout();
+		commandBox = null;
 		if (configCard == null) {
 			int searchX = frameX + 2 * TAB_W + 2 * GAP;
 			int searchW = Math.max(60, frameX + frameW - searchX);
@@ -220,6 +228,46 @@ public final class KhoaToolsScreen extends Screen {
 			y += h + 4;
 		}
 		keybindY = y; // Keybind row sits under the last setting
+		commandY = keybindY + 34; // Command row sits under the Keybind row
+		commandBox = new EditBox(this.font, controlX, commandY + 6, controlW, 18, Component.literal("Command"));
+		commandBox.setMaxLength(48);
+		commandBox.setHint(Component.literal("e.g. " + configCard.id()));
+		commandBox.setValue(KhoaCommandBinds.get(configCard.id()));
+		commandBox.setResponder(value -> {
+			pendingCommand = value; // applied after a short pause, on Enter, on Back or when the screen closes
+			pendingTicks = 0;
+		});
+		pendingCommand = null;
+		this.addRenderableWidget(commandBox);
+	}
+
+	/** Saves the typed command names and creates / hides the aliases right now. */
+	private void commitCommand() {
+		if (pendingCommand == null || configCard == null || commandBox == null) {
+			return;
+		}
+		String text = pendingCommand;
+		pendingCommand = null;
+		KhoaCommandBinds.tell(KhoaCommandBinds.set(configCard.id(), text));
+		String clean = KhoaCommandBinds.get(configCard.id());
+		if (!clean.equals(commandBox.getValue()) && !commandBox.isFocused()) {
+			commandBox.setValue(clean); // show what was really saved (lower case, valid names only)
+			pendingCommand = null;
+		}
+	}
+
+	@Override
+	public void tick() {
+		super.tick();
+		if (pendingCommand != null && ++pendingTicks >= 40) {
+			commitCommand();
+		}
+	}
+
+	@Override
+	public void removed() {
+		commitCommand();
+		super.removed();
 	}
 
 	private EditBox decimalBox(int x, int y, int w, boolean allowNegative, double initial, DoubleConsumer set, String name) {
@@ -408,6 +456,15 @@ public final class KhoaToolsScreen extends Screen {
 			}
 		}
 		renderKeybindRow(g, mouseX, mouseY);
+		renderCommandRow(g);
+	}
+
+	private void renderCommandRow(GuiGraphicsExtractor g) {
+		int h = 30;
+		g.fill(frameX, commandY, frameX + frameW, commandY + h, 0x90101010);
+		border(g, frameX, commandY, frameX + frameW, commandY + h, BORDER);
+		g.text(this.font, "Command", frameX + 8, commandY + 6, COL_TEXT);
+		g.text(this.font, "Extra /command, same arguments. Several: separate with spaces.", frameX + 8, commandY + 18, COL_DIM);
 	}
 
 	private void renderKeybindRow(GuiGraphicsExtractor g, int mouseX, int mouseY) {
@@ -488,6 +545,7 @@ public final class KhoaToolsScreen extends Screen {
 		}
 		waitingKey = false; // any other click cancels waiting
 		if (inside(mx, my, frameX, TAB_Y, 60, TAB_H)) {
+			commitCommand();
 			configCard = null;
 			this.rebuildWidgets();
 			return true;
@@ -514,6 +572,11 @@ public final class KhoaToolsScreen extends Screen {
 	/** While the Keybind button says [ Waiting ]: Esc = None, any other key = the new keybind. Handled before Screen closes on Esc. */
 	@Override
 	public boolean keyPressed(KeyEvent event) {
+		if (configCard != null && commandBox != null && commandBox.isFocused()
+			&& (event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER)) {
+			commitCommand();
+			return true;
+		}
 		if (configCard != null && waitingKey) {
 			int key = event.key();
 			if (key == InputConstants.KEY_ESCAPE) {

@@ -43,6 +43,18 @@ public abstract class ChatComponentMixin implements ChatComponentExt {
 	@Shadow
 	protected abstract void addMessageToQueue(GuiMessage message);
 
+	@Shadow
+	protected abstract void refreshTrimmedMessages();
+
+	@Shadow
+	public abstract void resetChatScroll();
+
+	@Shadow
+	public abstract void scrollChat(int amount);
+
+	@Shadow
+	public abstract int getLinesPerPage();
+
 	// Vanilla keeps 100 messages / 100 wrapped lines. With a custom length we do the trimming ourselves.
 	@ModifyConstant(method = "addMessageToQueue", constant = @Constant(intValue = 100))
 	private int khoatools$messageLimit(int vanilla) {
@@ -65,6 +77,7 @@ public abstract class ChatComponentMixin implements ChatComponentExt {
 		GuiMessageTag tag, CallbackInfo ci) {
 		if (source != GuiMessageSource.SYSTEM_CLIENT) {
 			ChatCache.record(content);
+			ChatHighlightFeature.onServerMessage(content);
 		}
 	}
 
@@ -97,7 +110,7 @@ public abstract class ChatComponentMixin implements ChatComponentExt {
 
 	@ModifyVariable(method = "addMessage", at = @At("HEAD"), argsOnly = true, ordinal = 0)
 	private Component khoatools$makeCoordinatesClickable(Component content) {
-		return ChatHighlightFeature.apply(ChatCoordinates.makeClickable(content));
+		return ChatTranslatorFeature.markTranslatable(ChatHighlightFeature.apply(ChatCoordinates.makeClickable(content)));
 	}
 
 	@Override
@@ -133,6 +146,37 @@ public abstract class ChatComponentMixin implements ChatComponentExt {
 		for (int i = this.allMessages.size() - 1; i >= 0; i--) {
 			this.addMessageToDisplayQueue(this.allMessages.get(i));
 		}
+	}
+
+	@Override
+	public List<GuiMessage> khoatools$messages() {
+		return this.allMessages;
+	}
+
+	@Override
+	public void khoatools$refresh() {
+		this.refreshTrimmedMessages();
+	}
+
+	@Override
+	public boolean khoatools$scrollTo(GuiMessage message) {
+		int first = -1;
+		int last = -1;
+		for (int i = 0; i < this.trimmedMessages.size(); i++) {
+			if (this.trimmedMessages.get(i).parent() == message) {
+				if (first < 0) {
+					first = i;
+				}
+				last = i;
+			}
+		}
+		if (first < 0) {
+			return false;
+		}
+		this.resetChatScroll();
+		// line 0 is the newest (bottom); put the middle line of the message in the middle of the page
+		this.scrollChat(Math.max(0, (first + last) / 2 - this.getLinesPerPage() / 2));
+		return true;
 	}
 
 	@Override

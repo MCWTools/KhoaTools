@@ -66,6 +66,11 @@ public final class AfkModeFeature implements KhoaFeature {
 		OptionUtil.force(mc.options.simulationDistance(), sim);
 	}
 
+	/** True while AFK Mode is on (used by AFK Alert). */
+	public static boolean isOn() {
+		return on;
+	}
+
 	@Override
 	public boolean isActive() {
 		return on;

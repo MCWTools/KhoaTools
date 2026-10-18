@@ -13,6 +13,8 @@ final class ChatTranslatorConfig {
  static void setModel(String v){KhoaConfig.put(SECTION,"model",v);}
  static String url(){return KhoaConfig.getString(SECTION,"url","http://localhost:11434");}
  static void setUrl(String v){KhoaConfig.put(SECTION,"url",v);}
+ static boolean auto(){return KhoaConfig.getBool(SECTION,"auto",false);}
+ static void setAuto(boolean v){KhoaConfig.put(SECTION,"auto",v);}
  static boolean pluginFormats(){return KhoaConfig.getBool(SECTION,"pluginformats",true);}
  static void setPluginFormats(boolean v){KhoaConfig.put(SECTION,"pluginformats",v);}
 }

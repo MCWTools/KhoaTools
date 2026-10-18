@@ -16,6 +16,10 @@ public final class ChatHighlightConfig {
 	private ChatHighlightConfig() {
 	}
 
+	public static ChatFormatting colorAt(int index) {
+		return COLORS[Math.floorMod(index, COLORS.length)];
+	}
+
 	public static int color() {
 		return Math.floorMod(KhoaConfig.getInt(SECTION, "color", 0), COLORS.length);
 	}
@@ -34,6 +38,24 @@ public final class ChatHighlightConfig {
 
 	public static void setBold(boolean value) {
 		KhoaConfig.put(SECTION, "bold", value);
+	}
+
+	/** Extra words that count as a mention of you, comma separated (nicknames). */
+	public static String keywords() {
+		return KhoaConfig.getString(SECTION, "keywords", "");
+	}
+
+	public static void setKeywords(String value) {
+		KhoaConfig.put(SECTION, "keywords", value);
+	}
+
+	/** Also color your name in your own messages (handy to test the feature). */
+	public static boolean own() {
+		return KhoaConfig.getBool(SECTION, "own", false);
+	}
+
+	public static void setOwn(boolean value) {
+		KhoaConfig.put(SECTION, "own", value);
 	}
 
 	public static float soundVolume() { return (float) KhoaConfig.getDouble(SECTION, "sound_volume", 1.0); }

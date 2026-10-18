@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 
 import khoa.tools.KhoaTools;
+import khoa.tools.client.config.KhoaCommandBinds;
 import khoa.tools.client.config.KhoaConfig;
 import khoa.tools.client.config.KhoaKeybinds;
 import khoa.tools.client.feature.KhoaFeature;
@@ -84,6 +85,9 @@ public class KhoaToolsClient implements ClientModInitializer {
 					openGuiNextTick = true;
 					return 1;
 				}));
+
+			// Extra command names set in each feature's config screen (Command row) -> same command, same arguments.
+			KhoaCommandBinds.registerAll(dispatcher);
 		});
 	}
 }

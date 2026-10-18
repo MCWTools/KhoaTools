@@ -1,5 +1,6 @@
 package khoa.tools.client.feature.chattranslator;
 
+import java.lang.reflect.Method;
 import java.net.ConnectException;
 import java.net.http.HttpConnectTimeoutException;
 import java.util.ArrayList;
@@ -17,9 +18,11 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.client.multiplayer.chat.GuiMessageSource;
 import net.minecraft.client.multiplayer.chat.GuiMessageTag;
@@ -37,8 +40,9 @@ import khoa.tools.setting.Setting;
 
 /**
  * Translates the TEXT of chat messages (never the sender part) with a small local model served by Ollama.
- * Flow: the message is shown as received -> language is guessed -> if it is not the target language the text goes to the model
- * -> the chat line is replaced by the translated one. Own messages and client messages are skipped.
+ * Default (hover mode): messages are shown as received. Hold the mouse on a message in the open chat for a moment and only that
+ * message is sent to the model, one at a time (hovering another one while the model is busy does nothing), then its line is replaced.
+ * Optional "Auto translate": every incoming message is translated as it arrives. Own messages and client messages are skipped.
  * /khoatoolsclient chattranslator            toggle
  * /khoatoolsclient chattranslator download   download the configured model through Ollama
  */
@@ -59,6 +63,67 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 	private static boolean on;
 	private static boolean warned;
 
+	// ---- hover mode ----
+	private static final String TOKEN_PREFIX = "kt:";
+	private static final long SESSION = new java.util.Random().nextLong() & 0xFFFFFFFFL;
+	private static final long DWELL_MS = 350;
+	private static final AtomicBoolean BUSY = new AtomicBoolean();
+	private static final Map<String, HoverEntry> TOKENS = new LinkedHashMap<>(64, 0.75f, false) {
+		@Override
+		protected boolean removeEldestEntry(Map.Entry<String, HoverEntry> eldest) {
+			return size() > 300;
+		}
+	};
+	private static int counter;
+	private static Pending pending;
+	private static String hoverToken;
+	private static long hoverSince;
+	private static boolean hoverHandled;
+	private static Method styleLookup;
+	private static boolean lookupFailed;
+
+	private record Pending(String token, String text) {
+	}
+
+	private record HoverEntry(ChatComponent chat, GuiMessage message, Split split, MessageSignature signature, GuiMessageSource source,
+		GuiMessageTag tag, int addedTime) {
+	}
+
+	@Override
+	public void onInit() {
+		ClientTickEvents.END_CLIENT_TICK.register(ChatTranslatorFeature::tickHover);
+	}
+
+	/** True for the hidden marker put on hover-mode messages (shift-click must not paste it into the chat box). */
+	public static boolean isToken(String insertion) {
+		return insertion != null && insertion.startsWith(TOKEN_PREFIX);
+	}
+
+	/**
+	 * Called before a message is added. In hover mode, a message that could be translated gets a hidden marker in its style
+	 * so the hovered line can be found again. Returns the content unchanged when nothing needs to be done.
+	 */
+	public static Component markTranslatable(Component content) {
+		pending = null;
+		if (!on || ChatTranslatorConfig.auto()) {
+			return content;
+		}
+		Minecraft mc = Minecraft.getInstance();
+		Split split = split(content);
+		if (split == null || split.message.length() > MAX_LENGTH || !LangDetect.worthTranslating(split.message)) {
+			return content;
+		}
+		if (mc.player != null && split.prefixText.contains(mc.player.getName().getString())) {
+			return content;
+		}
+		if (LangDetect.detect(split.message).equals(ChatTranslatorConfig.targetCode())) {
+			return content;
+		}
+		String token = TOKEN_PREFIX + Long.toHexString(SESSION) + ":" + (counter++);
+		pending = new Pending(token, split.message);
+		return content.copy().withStyle(style -> style.withInsertion(token));
+	}
+
 	@Override
 	public String id() {
 		return ChatTranslatorConfig.SECTION;
@@ -72,7 +137,7 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 	@Override
 	public String description() {
 		return "Translates chat messages (text only, not the player name) to the chosen language with a small local model. "
-			+ "Needs Ollama running; press Download model once. Each message is shown first, then replaced by the translation. "
+			+ "Needs Ollama running; press Download model once (it downloads and loads the model; later it loads itself on the first message). Messages are shown as they arrive; open the chat and hover a message to translate just that one (one at a time, no queue). Tick Auto translate to translate everything automatically. "
 			+ "Click the card to turn it on/off.";
 	}
 
@@ -86,6 +151,8 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 			Setting.action("download", "Download model", "Downloads the model above through Ollama (progress is shown in chat).",
 				"Download", ChatTranslatorFeature::download),
 			Setting.string("url", "Ollama address", "Where Ollama listens.", ChatTranslatorConfig::url, ChatTranslatorConfig::setUrl),
+			Setting.bool("auto", "Auto translate", "Unticked (default): hover a message in the open chat to translate it, one at a time. Ticked: every message is translated as it arrives.",
+				ChatTranslatorConfig::auto, ChatTranslatorConfig::setAuto),
 			Setting.bool("pluginformats", "Plugin chat formats", "Also translate servers whose chat looks like \"Rank Name: text\" or \"Name \u00BB text\".",
 				ChatTranslatorConfig::pluginFormats, ChatTranslatorConfig::setPluginFormats));
 	}
@@ -147,6 +214,8 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 
 	public static void onMessage(ChatComponent chat, GuiMessage added, Component content, MessageSignature signature,
 		GuiMessageSource source, GuiMessageTag tag) {
+		Pending marked = pending;
+		pending = null;
 		if (!on || source == GuiMessageSource.SYSTEM_CLIENT) {
 			return;
 		}
@@ -164,6 +233,13 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 		}
 
 		int addedTime = mc.gui.getGuiTicks();
+		if (!ChatTranslatorConfig.auto()) {
+			// hover mode: only remember the message, the model is asked when the mouse rests on it
+			if (marked != null && marked.text().equals(split.message)) {
+				TOKENS.put(marked.token(), new HoverEntry(chat, added, split, signature, source, tag, addedTime));
+			}
+			return;
+		}
 		String key = target + "\0" + split.message;
 		String cached = CACHE.get(key);
 		if (cached != null) {
@@ -224,6 +300,120 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 		return String.valueOf(cause.getMessage());
 	}
 
+	// ---- hover translation ----
+
+	private static void tickHover(Minecraft mc) {
+		if (!on || ChatTranslatorConfig.auto() || !(mc.screen instanceof ChatScreen) || TOKENS.isEmpty()) {
+			hoverToken = null;
+			return;
+		}
+		Style style = styleUnderMouse(mc);
+		String token = style == null ? null : style.getInsertion();
+		if (!isToken(token) || !TOKENS.containsKey(token)) {
+			hoverToken = null;
+			return;
+		}
+		long now = System.currentTimeMillis();
+		if (!token.equals(hoverToken)) {
+			hoverToken = token;
+			hoverSince = now;
+			hoverHandled = false;
+			return;
+		}
+		if (hoverHandled || now - hoverSince < DWELL_MS) {
+			return;
+		}
+		hoverHandled = true; // one try per hover: if the model is busy now, hover again later (no queue)
+		translateHovered(mc, token);
+	}
+
+	private static void translateHovered(Minecraft mc, String token) {
+		HoverEntry entry = TOKENS.get(token);
+		if (entry == null) {
+			return;
+		}
+		String target = ChatTranslatorConfig.targetCode();
+		String key = target + "\0" + entry.split().message;
+		String cached = CACHE.get(key);
+		if (cached != null) {
+			TOKENS.remove(token);
+			apply(entry.chat(), entry.message(), entry.split(), cached, entry.signature(), entry.source(), entry.tag(), entry.addedTime());
+			return;
+		}
+		if (!BUSY.compareAndSet(false, true)) {
+			mc.gui.setOverlayMessage(Component.literal("Translator is busy - hover again in a moment"), false);
+			return;
+		}
+		mc.gui.setOverlayMessage(Component.literal("Translating..."), false);
+		java.util.concurrent.CompletableFuture<String> future;
+		try {
+			future = OllamaClient.translate(entry.split().message, ChatTranslatorConfig.targetName());
+		} catch (RuntimeException e) {
+			BUSY.set(false);
+			warn(e);
+			return;
+		}
+		future.whenComplete((result, error) -> {
+			BUSY.set(false);
+			if (error != null) {
+				mc.execute(() -> warn(error));
+				return;
+			}
+			if (result == null || result.isBlank()) {
+				return;
+			}
+			CACHE.put(key, result);
+			mc.execute(() -> {
+				TOKENS.remove(token);
+				apply(entry.chat(), entry.message(), entry.split(), result, entry.signature(), entry.source(), entry.tag(), entry.addedTime());
+			});
+		});
+	}
+
+	/**
+	 * Style of the chat character under the mouse, asked from vanilla (ChatComponent.getClickedComponentStyleAt) by reflection so
+	 * a renamed method can never stop the game from starting - hover translation just reports that it is unavailable.
+	 */
+	private static Style styleUnderMouse(Minecraft mc) {
+		if (lookupFailed) {
+			return null;
+		}
+		try {
+			if (styleLookup == null) {
+				for (Method m : ChatComponent.class.getDeclaredMethods()) {
+					Class<?>[] p = m.getParameterTypes();
+					if (m.getName().equals("getClickedComponentStyleAt") && p.length == 2 && Style.class.isAssignableFrom(m.getReturnType())) {
+						m.setAccessible(true);
+						styleLookup = m;
+						break;
+					}
+				}
+				if (styleLookup == null) {
+					throw new NoSuchMethodException("getClickedComponentStyleAt");
+				}
+			}
+			Object window = call(mc, "getWindow");
+			Object mouse = mc.getClass().getField("mouseHandler").get(mc);
+			double x = ((Number) call(mouse, "xpos")).doubleValue() * ((Number) call(window, "getGuiScaledWidth")).doubleValue()
+				/ ((Number) call(window, "getScreenWidth")).doubleValue();
+			double y = ((Number) call(mouse, "ypos")).doubleValue() * ((Number) call(window, "getGuiScaledHeight")).doubleValue()
+				/ ((Number) call(window, "getScreenHeight")).doubleValue();
+			Class<?> type = styleLookup.getParameterTypes()[0];
+			Object a = type == int.class ? (Object) (int) x : (Object) x;
+			Object b = type == int.class ? (Object) (int) y : (Object) y;
+			return (Style) styleLookup.invoke(mc.gui.getChat(), a, b);
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			lookupFailed = true;
+			KhoaFeature.say(mc, "Chat Translator: hover translate is not available on this Minecraft version (" + e.getClass().getSimpleName()
+				+ ") - tick Auto translate instead");
+			return null;
+		}
+	}
+
+	private static Object call(Object target, String name) throws ReflectiveOperationException {
+		return target.getClass().getMethod(name).invoke(target);
+	}
+
 	// ---- splitting "sender part" from "message text" ----
 
 	private record Seg(String text, Style style) {
@@ -250,7 +440,7 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 		StringBuilder full = new StringBuilder();
 		content.visit((style, text) -> {
 			if (!text.isEmpty()) {
-				segs.add(new Seg(text, style));
+				segs.add(new Seg(text, isToken(style.getInsertion()) ? style.withInsertion(null) : style));
 				full.append(text);
 			}
 			return Optional.empty();

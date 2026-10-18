@@ -15,7 +15,9 @@ import khoa.tools.client.feature.fullbright.FullbrightFeature;
 import khoa.tools.client.feature.findleak.FindLeakFeature;
 import khoa.tools.client.feature.visiblebarrier.VisibleBarrierFeature;
 import khoa.tools.client.feature.betterchat.BetterChatFeature;
+import khoa.tools.client.feature.afkalert.AfkAlertFeature;
 import khoa.tools.client.feature.chathighlight.ChatHighlightFeature;
+import khoa.tools.client.feature.chatsearch.ChatSearchFeature;
 import khoa.tools.client.feature.chattranslator.ChatTranslatorFeature;
 import khoa.tools.client.feature.downloadchunk.DownloadChunkFeature;
 import khoa.tools.client.feature.downloadchunk.LoadDownloadedChunkFeature;
@@ -46,6 +48,7 @@ public final class KhoaFeatures {
 		new AutoClickerFeature(),
 		new AutoReconnectFeature(),
 		new AfkModeFeature(),
+		new AfkAlertFeature(),
 		new FullbrightFeature(),
 		new VisibleBarrierFeature(),
 		new FindLeakFeature(),
@@ -54,6 +57,7 @@ public final class KhoaFeatures {
 		new TntHitRayFeature(),
 		new ChatTranslatorFeature(),
 		new ChatHighlightFeature(),
+		new ChatSearchFeature(),
 		new RulerFeature(),
 		new ItemCounterFeature(),
 		new DrawShapeFeature(),
