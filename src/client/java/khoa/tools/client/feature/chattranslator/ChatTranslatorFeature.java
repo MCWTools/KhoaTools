@@ -1,6 +1,5 @@
 package khoa.tools.client.feature.chattranslator;
 
-import java.lang.reflect.Method;
 import java.net.ConnectException;
 import java.net.http.HttpConnectTimeoutException;
 import java.util.ArrayList;
@@ -21,6 +20,9 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 
 import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.platform.Window;
+
+import net.minecraft.client.gui.ActiveTextCollector;
 import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
@@ -79,8 +81,6 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 	private static String hoverToken;
 	private static long hoverSince;
 	private static boolean hoverHandled;
-	private static Method styleLookup;
-	private static boolean lookupFailed;
 
 	private record Pending(String token, String text) {
 	}
@@ -370,48 +370,14 @@ public final class ChatTranslatorFeature implements KhoaFeature {
 		});
 	}
 
-	/**
-	 * Style of the chat character under the mouse, asked from vanilla (ChatComponent.getClickedComponentStyleAt) by reflection so
-	 * a renamed method can never stop the game from starting - hover translation just reports that it is unavailable.
-	 */
+	/** Style under the mouse in the open chat, found the same way vanilla finds clickable text (insertions included). */
 	private static Style styleUnderMouse(Minecraft mc) {
-		if (lookupFailed) {
-			return null;
-		}
-		try {
-			if (styleLookup == null) {
-				for (Method m : ChatComponent.class.getDeclaredMethods()) {
-					Class<?>[] p = m.getParameterTypes();
-					if (m.getName().equals("getClickedComponentStyleAt") && p.length == 2 && Style.class.isAssignableFrom(m.getReturnType())) {
-						m.setAccessible(true);
-						styleLookup = m;
-						break;
-					}
-				}
-				if (styleLookup == null) {
-					throw new NoSuchMethodException("getClickedComponentStyleAt");
-				}
-			}
-			Object window = call(mc, "getWindow");
-			Object mouse = mc.getClass().getField("mouseHandler").get(mc);
-			double x = ((Number) call(mouse, "xpos")).doubleValue() * ((Number) call(window, "getGuiScaledWidth")).doubleValue()
-				/ ((Number) call(window, "getScreenWidth")).doubleValue();
-			double y = ((Number) call(mouse, "ypos")).doubleValue() * ((Number) call(window, "getGuiScaledHeight")).doubleValue()
-				/ ((Number) call(window, "getScreenHeight")).doubleValue();
-			Class<?> type = styleLookup.getParameterTypes()[0];
-			Object a = type == int.class ? (Object) (int) x : (Object) x;
-			Object b = type == int.class ? (Object) (int) y : (Object) y;
-			return (Style) styleLookup.invoke(mc.gui.getChat(), a, b);
-		} catch (ReflectiveOperationException | RuntimeException e) {
-			lookupFailed = true;
-			KhoaFeature.say(mc, "Chat Translator: hover translate is not available on this Minecraft version (" + e.getClass().getSimpleName()
-				+ ") - tick Auto translate instead");
-			return null;
-		}
-	}
-
-	private static Object call(Object target, String name) throws ReflectiveOperationException {
-		return target.getClass().getMethod(name).invoke(target);
+		Window window = mc.getWindow();
+		int x = (int) mc.mouseHandler.getScaledXPos(window);
+		int y = (int) mc.mouseHandler.getScaledYPos(window);
+		ActiveTextCollector.ClickableStyleFinder finder = new ActiveTextCollector.ClickableStyleFinder(mc.font, x, y).includeInsertions(true);
+		mc.gui.getChat().captureClickableText(finder, window.getGuiScaledHeight(), mc.gui.getGuiTicks(), ChatComponent.DisplayMode.FOREGROUND);
+		return finder.result();
 	}
 
 	// ---- splitting "sender part" from "message text" ----
