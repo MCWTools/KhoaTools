@@ -70,6 +70,9 @@ public final class KhoaToolsScreen extends Screen {
 	private record Row(Setting setting, int y, int height, EditBox box, EditBox box2) {
 	}
 
+	/** Config screen: the DROPDOWN row whose list is currently open (null = none). */
+	private Row openDropdown;
+
 	private Tab tab = Tab.CLIENT;
 	private String searchText = "";
 	private double scroll;
@@ -193,6 +196,7 @@ public final class KhoaToolsScreen extends Screen {
 	}
 
 	private void buildConfigRows() {
+		openDropdown = null;
 		int descLines = this.font.split(Component.literal(configCard.description()), frameW).size();
 		int y = TAB_Y + TAB_H + 12 + descLines * 11 + 14;
 		int controlW = 120;
@@ -379,6 +383,10 @@ public final class KhoaToolsScreen extends Screen {
 			renderConfig(graphics, mouseX, mouseY);
 		}
 		super.extractRenderState(graphics, mouseX, mouseY, partialTick); // the EditBoxes
+		if (configCard != null && openDropdown != null) {
+			graphics.nextStratum(); // draw the open list above the boxes and sliders of the rows below
+			renderDropdownList(graphics, mouseX, mouseY);
+		}
 	}
 
 	private void renderList(GuiGraphicsExtractor g, int mouseX, int mouseY) {
@@ -473,18 +481,73 @@ public final class KhoaToolsScreen extends Screen {
 			} else if (s.type == Setting.Type.PAIR) {
 				g.text(this.font, s.labelA, controlX, row.y() + 6, COL_DIM);
 				g.text(this.font, s.labelB, controlX + 64, row.y() + 6, COL_DIM);
-			} else if (s.type == Setting.Type.ACTION || s.type == Setting.Type.CHOICE) {
+			} else if (s.type == Setting.Type.ACTION || s.type == Setting.Type.CHOICE || s.type == Setting.Type.DROPDOWN) {
 				int bx = frameX + frameW - 128;
 				int by = row.y() + (row.height() - 18) / 2;
-				boolean hover = inside(mouseX, mouseY, bx, by, 120, 18);
-				g.fill(bx, by, bx + 120, by + 18, hover ? BG_HOVER : BG_NORMAL);
-				border(g, bx, by, bx + 120, by + 18, BORDER);
+				boolean dropdown = s.type == Setting.Type.DROPDOWN;
+				boolean hover = inside(mouseX, mouseY, bx, by, 120, 18) && (openDropdown == null || openDropdown == row);
+				g.fill(bx, by, bx + 120, by + 18, hover || (dropdown && openDropdown == row) ? BG_HOVER : BG_NORMAL);
+				border(g, bx, by, bx + 120, by + 18, dropdown && openDropdown == row ? COL_TEXT : BORDER);
 				String text = s.type == Setting.Type.ACTION ? s.getString() : s.options.get(s.getChoice());
-				g.text(this.font, text, bx + (120 - this.font.width(text)) / 2, by + 5, COL_TEXT);
+				if (dropdown) {
+					text = this.font.plainSubstrByWidth(text, 120 - 22);
+					g.text(this.font, text, bx + 6, by + 5, COL_TEXT);
+					g.text(this.font, openDropdown == row ? "^" : "v", bx + 120 - 12, by + 5, COL_DIM);
+				} else {
+					g.text(this.font, text, bx + (120 - this.font.width(text)) / 2, by + 5, COL_TEXT);
+				}
 			}
 		}
 		renderKeybindRow(g, mouseX, mouseY);
 		renderCommandRow(g);
+	}
+
+	private static final int DROPDOWN_ITEM_H = 16;
+
+	/** x, y, w, h of the open list of a DROPDOWN row: under its button, or above it when there is no room below. */
+	private int[] dropdownRect(Row row) {
+		int n = row.setting().options.size();
+		int h = n * DROPDOWN_ITEM_H + 2;
+		int bx = frameX + frameW - 128;
+		int by = row.y() + (row.height() - 18) / 2;
+		int y = by + 18;
+		if (y + h > this.height - 2) {
+			y = Math.max(2, by - h);
+		}
+		return new int[] { bx, y, 120, h };
+	}
+
+	private void renderDropdownList(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+		Setting s = openDropdown.setting();
+		int[] r = dropdownRect(openDropdown);
+		g.fill(r[0], r[1], r[0] + r[2], r[1] + r[3], 0xF0101010);
+		border(g, r[0], r[1], r[0] + r[2], r[1] + r[3], COL_TEXT);
+		for (int i = 0; i < s.options.size(); i++) {
+			int iy = r[1] + 1 + i * DROPDOWN_ITEM_H;
+			boolean hover = inside(mouseX, mouseY, r[0] + 1, iy, r[2] - 2, DROPDOWN_ITEM_H);
+			if (hover) {
+				g.fill(r[0] + 1, iy, r[0] + r[2] - 1, iy + DROPDOWN_ITEM_H, 0xFF404040);
+			}
+			g.text(this.font, this.font.plainSubstrByWidth(s.options.get(i), r[2] - 12), r[0] + 6, iy + 4,
+				i == s.getChoice() ? COL_GREEN : COL_TEXT);
+		}
+	}
+
+	/** Click while a dropdown list is open: pick the option under the mouse, or just close it. Always consumed. */
+	private boolean clickOpenDropdown(double mx, double my, int button) {
+		Row row = openDropdown;
+		openDropdown = null;
+		if (button != 0) {
+			return true;
+		}
+		int[] r = dropdownRect(row);
+		if (inside(mx, my, r[0] + 1, r[1] + 1, r[2] - 2, r[3] - 2)) {
+			int index = (int) ((my - (r[1] + 1)) / DROPDOWN_ITEM_H);
+			if (index >= 0 && index < row.setting().options.size()) {
+				row.setting().setChoice(index);
+			}
+		}
+		return true;
 	}
 
 	private void renderCommandRow(GuiGraphicsExtractor g) {
@@ -514,6 +577,9 @@ public final class KhoaToolsScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+		if (configCard != null && openDropdown != null) {
+			return clickOpenDropdown(event.x(), event.y(), event.button());
+		}
 		if (super.mouseClicked(event, doubleClick)) { // an EditBox took it (focus + caret)
 			return true;
 		}
@@ -575,14 +641,18 @@ public final class KhoaToolsScreen extends Screen {
 		if (inside(mx, my, frameX, TAB_Y, 60, TAB_H)) {
 			commitCommand();
 			configCard = null;
+			openDropdown = null;
 			this.rebuildWidgets();
 			return true;
 		}
 		for (Row row : rows) {
-			if ((row.setting().type == Setting.Type.ACTION || row.setting().type == Setting.Type.CHOICE)
+			if ((row.setting().type == Setting.Type.ACTION || row.setting().type == Setting.Type.CHOICE
+				|| row.setting().type == Setting.Type.DROPDOWN)
 				&& inside(mx, my, frameX + frameW - 128, row.y() + (row.height() - 18) / 2, 120, 18)) {
 				if (row.setting().type == Setting.Type.ACTION) {
 					row.setting().run();
+				} else if (row.setting().type == Setting.Type.DROPDOWN) {
+					openDropdown = row;
 				} else {
 					row.setting().nextChoice();
 				}

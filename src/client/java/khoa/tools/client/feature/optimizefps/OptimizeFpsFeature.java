@@ -122,7 +122,7 @@ public class OptimizeFpsFeature implements KhoaFeature {
 				"Only render this many entities, nearest first (players always shown). -1 = no limit, 0 = hide all other entities.",
 				-1, 99999, () -> KhoaConfig.getInt(id(), "entity", -1), v -> KhoaConfig.put(id(), "entity", v)),
 			Setting.bool("optimized_spawner", "Optimized Spawner",
-				"Hides the model and the particles of spawners you can't see: farther than Spinning Model Range from the camera (freecam included), or behind a solid block / another spawner.",
+				"Hides the model and the particles of spawners you can't see: farther than Spinning Model Range from the camera (freecam included), or behind a solid block / another spawner. Cage faces between touching spawners are skipped, and a spawner fully enclosed by solid blocks / spawners is drawn as a dark grey solid block.",
 				() -> KhoaConfig.getBool(id(), "optimized_spawner", false), v -> {
 					KhoaConfig.put(id(), "optimized_spawner", v);
 					resetSpawnerCaches();
@@ -186,6 +186,7 @@ public class OptimizeFpsFeature implements KhoaFeature {
 	}
 
 	private static void recompute(Minecraft mc) {
+		syncSpawnerFaceCull(mc);
 		if (mc.level == null || animationLevel() >= 3 || (mc.level.getGameTime() % 100) == 0) {
 			pruneCache();
 		}
@@ -315,6 +316,50 @@ public class OptimizeFpsFeature implements KhoaFeature {
 		CACHE.clear();
 		VISIBLE.clear();
 		VISIBLE_AT.clear();
+	}
+
+	// ---- spawner cage faces (BlockMixin) ----
+
+	/** Read by the chunk meshing threads, so it is a plain volatile copy of the setting, refreshed every tick. */
+	private static volatile boolean cullSpawnerFaces = false;
+
+	/** Follows Optimized Spawner on/off (button, setting, command, saved state) and re-meshes the loaded chunks once when it changes. */
+	private static void syncSpawnerFaceCull(Minecraft mc) {
+		boolean want = optimizedSpawner();
+		if (want == cullSpawnerFaces) return;
+		cullSpawnerFaces = want;
+		if (mc.level != null && mc.levelRenderer != null) {
+			mc.levelRenderer.allChanged();
+		}
+	}
+
+	/**
+	 * Called from Block.shouldRenderFace (chunk meshing): a spawner face that touches another spawner is not drawn.
+	 * Spawners have see-through cages, so vanilla keeps those inner faces; in a block of spawners that is layers of cage
+	 * texture stacked on every pixel. A spawner that is fully surrounded by solid blocks / spawners ends up with no faces at all.
+	 */
+	public static boolean cullSpawnerFace(BlockState state, BlockState neighbor) {
+		return cullSpawnerFaces && isSpawner(state) && isSpawner(neighbor);
+	}
+
+	/** Dark grey stand-in drawn for a spawner that is fully enclosed (blackstone is the darkest grey-black solid block). */
+	public static BlockState enclosedSpawnerStandIn() {
+		return Blocks.BLACKSTONE.defaultBlockState();
+	}
+
+	/** Meshing thread: true when this spawner has a solid block or another spawner on all 6 sides, so it cannot be seen from outside. */
+	public static boolean spawnerEnclosed(net.minecraft.client.renderer.block.BlockAndTintGetter level, BlockPos pos, BlockState state) {
+		if (!cullSpawnerFaces || !isSpawner(state)) return false;
+		BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+		for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+			BlockState n = level.getBlockState(m.setWithOffset(pos, d));
+			if (!n.isSolidRender() && !isSpawner(n)) return false;
+		}
+		return true;
+	}
+
+	private static boolean isSpawner(BlockState bs) {
+		return bs.is(Blocks.SPAWNER) || bs.is(Blocks.TRIAL_SPAWNER);
 	}
 
 	/** True = the spawner at this state's position is not seen, draw nothing for it. */

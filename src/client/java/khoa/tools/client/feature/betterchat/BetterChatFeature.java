@@ -49,7 +49,13 @@ public final class BetterChatFeature implements KhoaFeature {
 			Setting.integer("length", "Messages kept", "How many messages are kept before the oldest is deleted. 0 = vanilla default (100). Higher applies at once; lower is applied on the next join (nothing is deleted now).",
 				0, BetterChatConfig.MAX_LENGTH, BetterChatConfig::length, value -> applyLength(Minecraft.getInstance(), value)),
 			Setting.bool("cache", "Cache chat", "Save server chat to disk and show it again on the next join.",
-				BetterChatConfig::cache, value -> applyCache(Minecraft.getInstance(), value)));
+				BetterChatConfig::cache, value -> applyCache(Minecraft.getInstance(), value)),
+			Setting.bool("copyraw", "CTRL SHIFT CLICK to copy raw message", "Ctrl + Shift + left click on a chat message copies it as raw text: prefix, names, gradients and formats as &c / &#rrggbb / &l codes, "
+				+ "so pasting it back in chat gives the same colours (on servers that translate & codes).",
+				BetterChatConfig::copyRaw, BetterChatConfig::setCopyRaw),
+			Setting.bool("editmsg", "CTRL ALT CLICK to edit message", "Ctrl + Alt + left click on a chat message greys it out and puts its raw text (& codes) in the chat box. "
+				+ "Press Enter to replace the message on your client only: nothing is sent to the server. Closing the chat restores it.",
+				BetterChatConfig::editMessage, BetterChatConfig::setEditMessage));
 	}
 
 	@Override

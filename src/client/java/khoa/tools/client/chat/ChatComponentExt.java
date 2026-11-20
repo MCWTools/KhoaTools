@@ -3,6 +3,7 @@ package khoa.tools.client.chat;
 import java.util.List;
 
 import net.minecraft.client.multiplayer.chat.GuiMessage;
+import net.minecraft.util.FormattedCharSequence;
 
 /** Implemented on ChatComponent by {@link ChatComponentMixin}. */
 public interface ChatComponentExt {
@@ -21,4 +22,7 @@ public interface ChatComponentExt {
 
 	/** Reset the scroll and scroll so the lines of this message are in the middle of the chat. False when it has no visible lines. */
 	boolean khoatools$scrollTo(GuiMessage message);
+
+	/** The stored message that owns this displayed line (compared by instance), or null. */
+	GuiMessage khoatools$messageOfLine(FormattedCharSequence line);
 }

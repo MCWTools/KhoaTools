@@ -180,6 +180,16 @@ public abstract class ChatComponentMixin implements ChatComponentExt {
 	}
 
 	@Override
+	public GuiMessage khoatools$messageOfLine(net.minecraft.util.FormattedCharSequence line) {
+		for (GuiMessage.Line candidate : this.trimmedMessages) {
+			if (candidate.content() == line) {
+				return candidate.parent();
+			}
+		}
+		return null;
+	}
+
+	@Override
 	public void khoatools$addRestored(GuiMessage message) {
 		this.addMessageToDisplayQueue(message);
 		this.addMessageToQueue(message);

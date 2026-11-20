@@ -49,6 +49,26 @@ public final class BetterChatConfig {
 		return section.has("cache") && section.get("cache").getAsBoolean();
 	}
 
+	/** CTRL + SHIFT + click on a chat message copies it as raw text with all colours and formats. */
+	public static boolean copyRaw() {
+		return KhoaConfig.getBool(SECTION, "copyraw", false);
+	}
+
+	public static void setCopyRaw(boolean enabled) {
+		KhoaConfig.put(SECTION, "copyraw", enabled);
+		KhoaConfig.save();
+	}
+
+	/** CTRL + ALT + click on a chat message edits it on your client only (the server never sees the change). */
+	public static boolean editMessage() {
+		return KhoaConfig.getBool(SECTION, "editmsg", false);
+	}
+
+	public static void setEditMessage(boolean enabled) {
+		KhoaConfig.put(SECTION, "editmsg", enabled);
+		KhoaConfig.save();
+	}
+
 	public static void setLength(int length) {
 		KhoaConfig.section(SECTION).addProperty("length", length);
 		KhoaConfig.save();

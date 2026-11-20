@@ -1,0 +1,51 @@
+# On every push to main: build with an auto-incremented version (base version from gradle.properties
+# + the workflow run number, e.g. 1.2.0+build.7), then publish a GitHub release containing that jar.
+# The jar/mod version and the release tag are the same number, so both go up on every push.
+
+name: release
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+      - name: compute version
+        id: ver
+        env:
+          HEAD_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if grep -qE '^mod_version\s*=' gradle.properties; then key=mod_version; else key=version; fi
+          base=$(grep -E "^${key}\s*=" gradle.properties | head -n 1 | cut -d= -f2 | tr -d '\r ')
+          full="${base}+build.${GITHUB_RUN_NUMBER}"
+          echo "key=${key}" >> "$GITHUB_OUTPUT"
+          echo "full=${full}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${base}-build.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          first=$(printf '%s' "$HEAD_MSG" | head -n 1)
+          echo "title=KhoaTools ${full}: ${first}" >> "$GITHUB_OUTPUT"
+      - name: build
+        run: ./gradlew build -P${{ steps.ver.outputs.key }}=${{ steps.ver.outputs.full }}
+      - name: create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          jar=$(ls build/libs/*.jar | grep -v -- '-sources.jar' | grep -v -- '-dev.jar' | head -n 1)
+          gh release create "${{ steps.ver.outputs.tag }}" "$jar" \
+            --target "$GITHUB_SHA" \
+            --title "${{ steps.ver.outputs.title }}" \
+            --generate-notes

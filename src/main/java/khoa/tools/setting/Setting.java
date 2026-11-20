@@ -12,12 +12,12 @@ import java.util.function.Supplier;
 /**
  * One option of a feature, shown as a row in the feature's config screen. Kinds:
  * BOOL (tick box), INT (number box, digits only), DECIMAL (number box with a dot), STRING (text box),
- * TEXT (multi-line text box, uses the string getter/setter), SLIDER (int slider), CHOICE (button that cycles through names), PAIR (two decimal boxes), ACTION (button).
+ * TEXT (multi-line text box, uses the string getter/setter), SLIDER (int slider), CHOICE (button that cycles through names), DROPDOWN (button that opens a list of names), PAIR (two decimal boxes), ACTION (button).
  * The getter/setter decide where it is stored (usually config/khoatools.json).
  */
 public final class Setting {
 	public enum Type {
-		BOOL, INT, STRING, ACTION, DECIMAL, CHOICE, SLIDER, PAIR, TEXT
+		BOOL, INT, STRING, ACTION, DECIMAL, CHOICE, SLIDER, PAIR, TEXT, DROPDOWN
 	}
 
 	public final String key;
@@ -125,6 +125,15 @@ public final class Setting {
 		return s;
 	}
 
+	/** Like {@link #choice} but clicking opens a list to pick from (better for many options). The stored value is the index. */
+	public static Setting dropdown(String key, String label, String description, List<String> options, IntSupplier get, IntConsumer set) {
+		Setting s = new Setting(key, label, description, Type.DROPDOWN);
+		s.options = options;
+		s.intGet = get;
+		s.intSet = set;
+		return s;
+	}
+
 	/** A button row: {@code label} is the row title, {@code buttonText} the text on the button. */
 	public static Setting action(String key, String label, String description, String buttonText, Runnable run) {
 		Setting s = new Setting(key, label, description, Type.ACTION);
@@ -184,6 +193,11 @@ public final class Setting {
 	/** Current index of a CHOICE, always inside the option list. */
 	public int getChoice() {
 		return Math.floorMod(intGet.getAsInt(), Math.max(1, options.size()));
+	}
+
+	/** Sets a CHOICE / DROPDOWN by index (wrapped into the option list). */
+	public void setChoice(int index) {
+		intSet.accept(Math.floorMod(index, Math.max(1, options.size())));
 	}
 
 	public void nextChoice() {

@@ -11,6 +11,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 
 import khoa.tools.KhoaTools;
+import khoa.tools.api.KhoaFeatureRegistry;
+import khoa.tools.api.KhoaToolsAddon;
 import khoa.tools.client.config.KhoaCommandBinds;
 import khoa.tools.client.config.KhoaConfig;
 import khoa.tools.client.config.KhoaKeybinds;
@@ -26,6 +28,11 @@ public class KhoaToolsClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		KhoaConfig.load();
+		KhoaFeatureRegistry registry = new KhoaFeatureRegistry();
+		for (var entrypoint : net.fabricmc.loader.api.FabricLoader.getInstance().getEntrypointContainers("khoatools-addon", KhoaToolsAddon.class)) {
+			try { entrypoint.getEntrypoint().register(registry); }
+			catch (Exception e) { KhoaTools.LOGGER.error("KhoaTools addon failed to register", e); }
+		}
 
 		for (KhoaFeature feature : KhoaFeatures.all()) {
 			try {
